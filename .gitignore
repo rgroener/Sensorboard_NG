@@ -1,0 +1,7 @@
+*.lst
+*.gitignore
+*.git
+*.o
+*.elf
+*.map
+*.dep

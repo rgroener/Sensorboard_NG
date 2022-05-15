@@ -13,6 +13,9 @@
 #include <avr/pgmspace.h>
 #include <util/delay.h>
 #include "st7735.h"
+#include "grn_TWI.h"
+#include "EEPROM_64.h"
+#include "spi.h"
 
 
 #define BACKLIGHT_ON PORTB |= (1<<PB2)
@@ -82,30 +85,12 @@ void twi_Write(uint8_t u8data);
 uint8_t twi_GetStatus(void);
 
 
-void SPI_MasterInit(void)
-{
-	/* Set MOSI and SCK output, all others input */
-	//DDRB = (1<<MOSI)|(1<<SCK);
-	/* Enable SPI, Master, set clock rate fck/16 */
-	SPCR = (1<<SPE)|(1<<MSTR)|(1<<SPR0);
-}
-void SPI_MasterTransmit(char cData)
-{
-	/* Start transmission */
-	SPDR = cData;
-	/* Wait for transmission complete */
-	while(!(SPSR & (1<<SPIF)));
-}
+
 
 //UART
 void uart_send_char(char c);
 void uart_send_string(volatile char *s);
 ISR(USART0_RX_vect);
-
-
-
-
-
 
 int main(void)
 {
@@ -153,7 +138,7 @@ int main(void)
 
 	setup();
 	//SPI_MasterInit();
-	twi_Init();
+	TWIInit();
 
 	addresse=0;
 	position=20;
@@ -165,9 +150,10 @@ int main(void)
 	speedflag=1;
 	
 	MoveTo(0,80);
-	fore = GREEN;
+	fore = WHITE;//set color
 	FillRect(40,40);
 	
+	fore = YELLOW;//set color
 	uart_send_string("Hello\n\r");
 	speedflag=0; // Stop speedcounter
 	
@@ -214,47 +200,6 @@ ISR (TIMER1_COMPA_vect)
 		sec=0;
 		min++;
 	}
-}
-void twi_Init(void)
-{
- /* initialize TWI clock: 100 kHz clock, TWPS = 0 => prescaler = 1 */
-  
-  TWSR =0;                         /* no prescaler */
-  TWBR = ((8000000/400000)-16)/2;  /* (F_CPU / F_TWI) must be > 10 for stable operation */
-}
- 
-void twi_Start(void)
-{
-	TWCR = ((1<<TWINT) | (1<<TWSTA) | (1<<TWEN));
-	while((TWCR & (1<<TWINT)) == 0);
-}
-
-void twi_Stop(void)
-{
-	TWCR = ((1<<TWINT) | (1<<TWSTO) | (1<<TWEN));
-} 
-
-void twi_Write(uint8_t u8data)
-{
-	TWDR = u8data;
-	TWCR = ((1<<TWINT) | (1<<TWEN));
-	while((TWCR & (1<<TWINT)) == 0);
-}
-uint8_t twi_GetStatus(void)
-{
-	/*  0x08   Start condition sent
-	 *  0x10   repeated start condition sent
-	 *  0x18   SLA+W transmitted ACK received
-	 *  0x20   SLA+W transmitted NACK received
-	 *  0x28   data byte sent ACK received
-	 *  0x30   data byte sent NACK received
-	 *  0x38   Arbitration in SLA+W lost
-	 */
-	 
-	uint8_t status;
-	//mask status
-	status = TWSR & 0xF8;
-	return status;
 }
 
 void uart_send_char(char c)
