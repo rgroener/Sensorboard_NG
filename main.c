@@ -21,6 +21,8 @@
 #define LED_OFF PORTC &= ~(1<<PC3)
 #define LED_ON PORTC |= (1<<PC3)
 
+#define USART_BAUDRATE 9600
+#define BAUD_PRESCALE (((F_CPU / (USART_BAUDRATE * 16UL)))-1)
 //Buttons 
 
 
@@ -95,6 +97,15 @@ void SPI_MasterTransmit(char cData)
 	while(!(SPSR & (1<<SPIF)));
 }
 
+//UART
+void uart_send_char(char c);
+void uart_send_string(volatile char *s);
+ISR(USART0_RX_vect);
+
+
+
+
+
 
 int main(void)
 {
@@ -109,24 +120,27 @@ int main(void)
 	DDRD &= ~((1<<PD6) | (1<<PD2) | (1<<PD5)); 	//Taster 1-3
 	PORTD |= ((1<<PD6) | (1<<PD2) | (1<<PD5)); 	//PUllups für Taster einschalten
 	
-		//Timer 1 Configuration
+	DDRD |= (1<<PD1)| (1<<PD0);//set TX0 as output
+	DDRD &= ~(1<<PD0);//set Rx as Input
+	//Timer 1 Configuration
 	OCR1A = 1249;	//OCR1A = 0x3D08;==1sec
-	
-    TCCR1B |= (1 << WGM12);
+	    TCCR1B |= (1 << WGM12);
     // Mode 4, CTC on OCR1A
-
     TIMSK1 |= (1 << OCIE1A);
     //Set interrupt on compare match
-
     TCCR1B |= (1 << CS11) | (1 << CS10);
     // set prescaler to 64 and start the timer
-    
-	/* Enable SPI, Master, set clock rate fck/2 */
+    /* Enable SPI, Master, set clock rate fck/2 */
 	SPCR = (1<<SPE)|(1<<MSTR); 
 	SPSR = (1<<SPI2X);
 	
-    sei();
-    // enable interrupts
+	//UART0
+    UCSR0B = (1<<RXEN0) | (1<<TXEN0) | (1<<RXCIE0);	//Turn on RX and TX circuits RXCIE0 enables Interrupt when byte received
+	UCSR0C = (1<<UCSZ01) | (1<<UCSZ00);	//8-Bit Char size
+	UBRR0H = (BAUD_PRESCALE >> 8);	//load upper 8-Bits of baud rate value into high byte of UBRR0H
+	UBRR0L = BAUD_PRESCALE;			//load lower 8-Bits of Baud rate into low byte of UBRR0L
+	
+    sei();// enable interrupts
     
     ms10=0;
     ms100=0;
@@ -143,10 +157,9 @@ int main(void)
 
 	addresse=0;
 	position=20;
-	
-	
+		
 	fore = WHITE; // White
-	scale = 1;
+	scale = 1;//font size
 	
 	speedtest=0;
 	speedflag=1;
@@ -155,38 +168,7 @@ int main(void)
 	fore = GREEN;
 	FillRect(40,40);
 	
-	MoveTo(40,80);
-	fore = RED;
-	FillRect(40,40);
-	
-	MoveTo(80,80);
-	fore = YELLOW;
-	FillRect(40,40);
-	
-	MoveTo(0,40);
-	fore = BLUE;
-	FillRect(40,40);
-
-	MoveTo(40,40);
-	fore = TUERKISE;
-	FillRect(40,40);
-	
-	MoveTo(80,40);
-	fore = BLUE_LIGHT;
-	FillRect(40,40);
-	
-	MoveTo(0,0);
-	fore = CYAN;
-	FillRect(40,40);
-	
-	MoveTo(40,0);
-	fore = VIOLET;
-	FillRect(40,40);
-	
-	MoveTo(80,0);
-	fore = WHITE;
-	FillRect(40,40);
-	
+	uart_send_string("Hello\n\r");
 	speedflag=0; // Stop speedcounter
 	
 	MoveTo(10,0);
@@ -274,3 +256,17 @@ uint8_t twi_GetStatus(void)
 	status = TWSR & 0xF8;
 	return status;
 }
+
+void uart_send_char(char c)
+{
+	while((UCSR0A & (1<<UDRE0)) == 0){};
+    UDR0 = c;
+}
+void uart_send_string(volatile char *s)
+{
+	while(*s != 0x00)
+	{
+		uart_send_char(*s);
+		s++;
+	}
+}//end of send_string
